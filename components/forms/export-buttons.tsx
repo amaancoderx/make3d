@@ -197,14 +197,14 @@ export function ExportButtons({
                   value={videoDuration}
                   onValueChange={setVideoDuration}
                   min={5}
-                  max={30}
+                  max={60}
                   step={1}
                   className="w-full"
                 />
                 <div
                   className={`text-muted-foreground mt-1 flex justify-between ${monoStyle} text-[11px]`}>
                   <span>5S</span>
-                  <span>30S</span>
+                  <span>60S</span>
                 </div>
               </div>
 

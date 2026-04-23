@@ -195,7 +195,7 @@ export function MinimalExport({ fileName, modelGroupRef, canvasRef, activeSectio
                 <span className="text-[12px] tabular-nums text-white/65">{videoDuration}s</span>
               </div>
               <input
-                type="range" min={3} max={30} step={1} value={videoDuration}
+                type="range" min={3} max={60} step={1} value={videoDuration}
                 onChange={(e) => setVideoDuration(parseInt(e.target.value))}
                 className="h-[3px] w-full cursor-pointer appearance-none rounded-full bg-white/[0.12]
                   [&::-webkit-slider-thumb]:h-[14px]
