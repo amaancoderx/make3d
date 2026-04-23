@@ -66,22 +66,36 @@ function generateHTML(o: CodeOpts): string {
   const useComposer =
     o.useBloom || o.ppBloomEnabled || o.ppChromaticEnabled || o.ppFilmEnabled || hasColorGrade;
 
-  // Use the `postprocessing` library (same one the live preview uses via
-  // @react-three/postprocessing) so Bloom / Chromatic Aberration / Film Grain /
-  // Contrast / Saturation match the editor pixel-for-pixel. UnrealBloomPass
-  // from three/addons has a very different look and is avoided here.
+  // Use three/addons exclusively - no external CDN bundles, no sandbox
+  // issues. Parameters below are tuned to approximate the look of the
+  // editor preview (which uses @react-three/postprocessing internally).
   const ppImports: string[] = [];
   if (useComposer) {
-    const names = ["EffectComposer", "RenderPass", "EffectPass"];
-    if (o.useBloom || o.ppBloomEnabled) names.push("BloomEffect");
-    if (o.ppChromaticEnabled) names.push("ChromaticAberrationEffect");
-    if (o.ppFilmEnabled) names.push("NoiseEffect", "BlendFunction");
-    if (hasColorGrade) {
-      names.push("BrightnessContrastEffect", "HueSaturationEffect");
-    }
     ppImports.push(
-      `import { ${names.join(", ")} } from 'postprocessing';`,
+      "import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';",
+      "import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';",
+      "import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';",
     );
+    if (o.useBloom || o.ppBloomEnabled) {
+      ppImports.push(
+        "import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';",
+      );
+    }
+    if (o.ppChromaticEnabled || hasColorGrade || o.ppFilmEnabled) {
+      ppImports.push(
+        "import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';",
+      );
+    }
+    if (o.ppChromaticEnabled) {
+      ppImports.push(
+        "import { RGBShiftShader } from 'three/addons/shaders/RGBShiftShader.js';",
+      );
+    }
+    if (o.ppFilmEnabled) {
+      ppImports.push(
+        "import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';",
+      );
+    }
   }
 
   const autoRotateCode = o.autoRotate
@@ -135,68 +149,84 @@ grid.position.y = -40;
 scene.add(grid);`
     : "";
 
-  // No custom shader needed - postprocessing library ships BrightnessContrastEffect
-  // and HueSaturationEffect that match exactly what the editor preview uses.
-  const colorGradeShader = "";
+  const colorGradeShader = hasColorGrade
+    ? `
+// ─── Color grading shader (contrast + saturation) ─────
+const ColorGradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    contrast: { value: ${o.contrast.toFixed(2)} },
+    saturation: { value: ${o.saturation.toFixed(2)} },
+  },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: \`
+    uniform sampler2D tDiffuse;
+    uniform float contrast;
+    uniform float saturation;
+    varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      c.rgb = (c.rgb - 0.5) * contrast + 0.5;
+      float gray = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(vec3(gray), c.rgb, saturation);
+      gl_FragColor = c;
+    }
+  \`,
+};`
+    : "";
 
   const composerSetup = useComposer
     ? `
-// ─── Post-Processing Composer (postprocessing library, 1:1 with editor) ─────
+// ─── Post-Processing Composer (three/addons - works in any browser) ───
 const composer = new EffectComposer(renderer);
 composer.setSize(window.innerWidth, window.innerHeight);
 composer.setPixelRatio(window.devicePixelRatio);
 composer.addPass(new RenderPass(scene, camera));
-
-const _effects = [];
 ${
   o.useBloom
-    ? `_effects.push(new BloomEffect({
-  intensity: ${(o.bloomIntensity * 0.8).toFixed(2)},
-  luminanceThreshold: 0.9,
-  luminanceSmoothing: 0.3,
-  mipmapBlur: true,
-  radius: 0.4,
-}));`
+    ? `
+// Display Bloom - tuned to approximate editor's BloomEffect with mipmapBlur
+composer.addPass(new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  ${(o.bloomIntensity * 0.6).toFixed(2)},  // strength
+  0.4,                                      // radius
+  0.85                                      // threshold
+));`
     : ""
 }${
         o.ppBloomEnabled
           ? `
-_effects.push(new BloomEffect({
-  intensity: ${o.ppBloomStrength.toFixed(2)},
-  luminanceThreshold: 0.6,
-  luminanceSmoothing: 0.4,
-  mipmapBlur: true,
-  radius: 0.7,
-}));`
+// Post-Processing Bloom
+composer.addPass(new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  ${(o.ppBloomStrength * 0.7).toFixed(2)}, // strength
+  0.6,                                      // radius
+  0.55                                      // threshold
+));`
           : ""
       }${
         o.ppChromaticEnabled
           ? `
-_effects.push(new ChromaticAberrationEffect({
-  offset: new THREE.Vector2(${o.ppChromaticOffset.toFixed(4)}, ${o.ppChromaticOffset.toFixed(4)}),
-  radialModulation: false,
-  modulationOffset: 0,
-}));`
+// Chromatic Aberration via RGB shift
+const _rgbShift = new ShaderPass(RGBShiftShader);
+_rgbShift.uniforms.amount.value = ${o.ppChromaticOffset.toFixed(4)};
+composer.addPass(_rgbShift);`
           : ""
       }${
         o.ppFilmEnabled
           ? `
-const _noise = new NoiseEffect({
-  blendFunction: BlendFunction.OVERLAY,
-  premultiply: true,
-});
-_noise.blendMode.opacity.value = ${o.ppFilmIntensity.toFixed(2)};
-_effects.push(_noise);`
+// Film Grain
+composer.addPass(new FilmPass(${o.ppFilmIntensity.toFixed(2)}));`
           : ""
       }${
         hasColorGrade
           ? `
-_effects.push(new BrightnessContrastEffect({ brightness: 0, contrast: ${(o.contrast - 1).toFixed(2)} }));
-_effects.push(new HueSaturationEffect({ saturation: ${(o.saturation - 1).toFixed(2)}, hue: 0 }));`
+// Contrast + Saturation via custom shader
+composer.addPass(new ShaderPass(ColorGradeShader));`
           : ""
       }
-
-composer.addPass(new EffectPass(camera, ..._effects));`
+// Output pass - handles color space conversion to sRGB for display
+composer.addPass(new OutputPass());`
     : "";
 
   const renderCall = useComposer ? "composer.render();" : "renderer.render(scene, camera);";
@@ -299,7 +329,7 @@ function updateAscii() {
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"${useComposer ? ',\n    "postprocessing": "https://esm.sh/postprocessing@6.38.0?deps=three@0.170.0&external=three"' : ""}
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
   }
 }
 </script>
