@@ -299,7 +299,7 @@ function updateAscii() {
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"${useComposer ? ',\n    "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.38.0/build/postprocessing.esm.js"' : ""}
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"${useComposer ? ',\n    "postprocessing": "https://esm.sh/postprocessing@6.38.0?deps=three@0.170.0&external=three"' : ""}
   }
 }
 </script>
