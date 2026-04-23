@@ -6,6 +6,7 @@ import { TEXTURE_PRESETS } from "./constants";
 import { loadTexture } from "./texture-cache";
 import type { TextureExportState } from "./types";
 import { VideoRecorder, downloadRecording } from "./video-recorder";
+import { drawOverlayOnto, createLiveComposite, hasActiveOverlay } from "./export-compositor";
 
 export async function prepareMaterialWithTextures(
   material: THREE.MeshPhysicalMaterial,
@@ -658,12 +659,23 @@ export async function exportToVideo(
   duration: number = 5000,
   fps: number = 30,
 ): Promise<boolean> {
+  let compositeHandle: { canvas: HTMLCanvasElement; stop: () => void } | null =
+    null;
+
   try {
     if (!canvas) {
       throw new Error("Canvas not found");
     }
 
-    const recorder = new VideoRecorder(canvas, {
+    // If a 2D overlay (ASCII) is active, capture from a live composite canvas
+    // that merges WebGL + overlay each frame. Otherwise capture the raw WebGL canvas.
+    let captureCanvas: HTMLCanvasElement = canvas;
+    if (hasActiveOverlay()) {
+      compositeHandle = createLiveComposite(canvas);
+      captureCanvas = compositeHandle.canvas;
+    }
+
+    const recorder = new VideoRecorder(captureCanvas, {
       format,
       fps,
       quality: 0.9,
@@ -686,10 +698,13 @@ export async function exportToVideo(
         } catch (error) {
           console.error("Recording error:", error);
           resolve(false);
+        } finally {
+          if (compositeHandle) compositeHandle.stop();
         }
       }, duration);
     });
   } catch (error) {
+    if (compositeHandle) compositeHandle.stop();
     console.error("Export video error:", error);
     toast.error(`Failed to export ${format.toUpperCase()}: ${error}`);
     return false;
@@ -760,6 +775,10 @@ export async function exportToPNG(
     } else {
       ctx.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
     }
+
+    // Composite any active 2D overlay (ASCII effect) on top so the PNG
+    // matches the on-screen preview pixel for pixel.
+    drawOverlayOnto(ctx, exportCanvas.width, exportCanvas.height);
 
     const dataURL = exportCanvas.toDataURL("image/png");
     const link = document.createElement("a");

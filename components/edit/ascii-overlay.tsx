@@ -211,6 +211,7 @@ export function AsciiOverlay({ sourceCanvasRef }: AsciiOverlayProps) {
   return (
     <canvas
       ref={overlayRef}
+      data-ascii-overlay="true"
       style={{
         position: "absolute",
         top: 0,

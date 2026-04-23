@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { useEditorStore } from "@/lib/store";
+import { createLiveComposite, hasActiveOverlay } from "@/lib/export-compositor";
 
 export interface RecordingOptions {
   duration?: number;
@@ -375,6 +376,8 @@ export async function recordWithToastProgress({
 }: ToastRecordingOptions): Promise<void> {
   let toastId: string | number;
   let recorder: VideoRecorder;
+  let compositeHandle: { canvas: HTMLCanvasElement; stop: () => void } | null =
+    null;
 
   try {
     toastId = toast.loading(`Recording ${format.toUpperCase()} - 0.0s`, {
@@ -382,7 +385,14 @@ export async function recordWithToastProgress({
       dismissible: false,
     });
 
-    recorder = new VideoRecorder(canvas, {
+    // Use live composite when 2D overlay is active so the recording matches the preview
+    let captureCanvas: HTMLCanvasElement = canvas;
+    if (hasActiveOverlay()) {
+      compositeHandle = createLiveComposite(canvas);
+      captureCanvas = compositeHandle.canvas;
+    }
+
+    recorder = new VideoRecorder(captureCanvas, {
       format,
       fps: format === "gif" ? 15 : 60,
       quality: format === "gif" ? 0.8 : 0.9,
@@ -424,11 +434,14 @@ export async function recordWithToastProgress({
         } catch (error) {
           toast.error("Recording failed", { id: toastId, duration: 4000 });
           onError?.(error as Error);
+        } finally {
+          if (compositeHandle) compositeHandle.stop();
         }
       },
       duration * 1000 + 100,
     );
   } catch (error) {
+    if (compositeHandle) compositeHandle.stop();
     toast.error("Failed to start recording", { id: toastId! });
     onError?.(error as Error);
   }
@@ -460,6 +473,8 @@ export async function recordWithStoreProgress({
   } = useEditorStore.getState();
 
   let recorder: VideoRecorder;
+  let compositeHandle: { canvas: HTMLCanvasElement; stop: () => void } | null =
+    null;
 
   try {
     setIsRecording(true);
@@ -467,7 +482,15 @@ export async function recordWithStoreProgress({
     setRecordingStatus("recording");
     setRecordingProgress(0, 0);
 
-    recorder = new VideoRecorder(canvas, {
+    // Capture from a live composite canvas when a 2D overlay (ASCII) is active,
+    // so the exported MP4/GIF includes everything visible on screen.
+    let captureCanvas: HTMLCanvasElement = canvas;
+    if (hasActiveOverlay()) {
+      compositeHandle = createLiveComposite(canvas);
+      captureCanvas = compositeHandle.canvas;
+    }
+
+    recorder = new VideoRecorder(captureCanvas, {
       format,
       fps: format === "gif" ? 15 : 60,
       quality: format === "gif" ? 0.8 : 0.9,
@@ -499,11 +522,14 @@ export async function recordWithStoreProgress({
           setRecordingStatus("error");
           resetRecordingState();
           onError?.(error as Error);
+        } finally {
+          if (compositeHandle) compositeHandle.stop();
         }
       },
       duration * 1000 + 100,
     );
   } catch (error) {
+    if (compositeHandle) compositeHandle.stop();
     setRecordingStatus("error");
     resetRecordingState();
     onError?.(error as Error);
