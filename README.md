@@ -20,25 +20,46 @@
 
 <br/>
 
-Make3D is a free, open-source browser tool that converts SVG files into interactive 3D models. No installs, no accounts, no exports to a third-party server. Everything runs locally in your browser.
+Make3D is a free, open-source browser tool that converts SVG files into interactive 3D models with cinematic post-processing, stylized effects, and real-time code generation. No installs, no accounts, no server uploads. Everything runs locally in your browser.
 
 ---
 
 ## Features
 
+### Core
+
 | Category | What you can do |
 |---|---|
-| **Geometry** | Control extrusion depth and bevel (thickness, size, smoothness) |
-| **Materials** | Choose from presets: Matte Metal, Chrome, Glass, Plastic, Ceramic, Gold, and more |
-| **Color** | Override all SVG colors with a single custom color picker |
-| **Environment** | Switch between HDRI presets or upload your own image for reflections |
-| **Background** | Pick any background color, or go black for a studio look |
-| **Vibe Mode** | Toggle bloom and glow for a dreamy, editorial render |
-| **Compare** | Drag a before/after slider to compare the flat SVG with the 3D result |
-| **Auto Rotate** | Enable auto-rotation with adjustable speed |
-| **Export** | Download as PNG (transparent), STL, GLB, or GLTF |
-| **Video** | Record an MP4 or GIF of the rotating model |
-| **Get Code** | Copy a self-contained HTML file using Three.js CDN, no npm needed |
+| **Geometry** | Control extrusion depth, bevel thickness, bevel size, and smoothness |
+| **Materials** | PBR presets (Matte Metal, Brushed Metal, Polished Metal, Plastic, Glass) with fine control over roughness, metalness, and clearcoat |
+| **Custom Color** | Override all SVG colors with a single color picker |
+| **Environment** | 9 HDRI presets plus custom HDRI upload for realistic reflections |
+| **Compare** | Drag a before/after slider between the flat SVG and the 3D result |
+
+### Lighting, effects, and look
+
+| Category | What you can do |
+|---|---|
+| **360 degree Lighting Bar** | Draggable handle on the right edge of the canvas rotates the main directional light around the model; highlights and shadows update in real time |
+| **Effects - ASCII** | Render the scene as a dot/shape grid in 8 patterns (Mixed, Blocks, Circles, Lines, Diagonal, Cross, Diamond, Hash) with Original/Duotone/Randomize color modes, adjustable Size, Brightness, and Spacing |
+| **Post-Processing** | Toggleable Bloom, Chromatic Aberration, and Film Grain. Combining Bloom with Chromatic Aberration produces the chrome/liquid-metal look |
+| **Adjustments** | Real-time Exposure, Contrast, and Saturation for cinematic grading |
+| **Camera** | FOV slider and one-click Reset Camera |
+| **Scene** | Background color picker and toggleable grid floor |
+| **Rotation** | Independent per-axis X / Y / Z speed sliders plus the classic auto-rotate toggle |
+| **Position** | X / Y / Z offset sliders with Reset |
+
+### Export
+
+| Format | Details |
+|---|---|
+| **PNG** | Transparent background, rendered at 3x resolution, composites the ASCII overlay and all post-processing |
+| **STL** | Mesh for 3D printing and CAD tools |
+| **GLB** | Binary GLTF with PBR materials, textures, and color |
+| **GLTF** | Text-based GLTF |
+| **MP4** | Rotating video up to 60 seconds, captures every active effect |
+| **GIF** | Animated GIF (capped at 10 seconds to keep file size sane) |
+| **Get Code** | Live Three.js HTML file that mirrors every current setting and updates as you move sliders. Save as .html, open in any browser, no npm needed |
 
 ---
 
@@ -46,11 +67,13 @@ Make3D is a free, open-source browser tool that converts SVG files into interact
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-username/make3d.git
+git clone https://github.com/amaancoderx/make3d.git
 cd make3d
 
 # Install dependencies
 npm install
+# or
+bun install
 
 # Start the dev server
 npm run dev
@@ -63,10 +86,41 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## How to Use
 
 1. Drop an SVG file onto the canvas, click to upload, or paste SVG code directly
-2. Adjust depth, bevel, and material settings in the right panel
-3. Use the Compare slider to see before and after side by side
-4. Export as PNG, STL, GLB, GLTF, MP4, or GIF
-5. Click **Get Code** to copy a ready-to-run HTML file you can open in any browser
+2. Adjust panels in the right sidebar: Geometry, Material, Environment, Effects, Post-Processing, Adjustments, Camera, Scene, Rotation, Position, Display
+3. Drag the **lighting bar** handle on the right edge of the canvas to sweep the main light around the model
+4. Use the **Compare** slider to see the original flat SVG next to the 3D render
+5. Export as PNG, STL, GLB, GLTF, MP4, or GIF - exports include every active effect you see in the preview
+6. Click **GET CODE** to copy or download a ready-to-run Three.js HTML file
+
+---
+
+## Panels at a Glance
+
+```
+GEOMETRY           depth, bevel
+MATERIAL           preset, roughness, metalness, clearcoat, custom color
+ENVIRONMENT        enabled, HDRI preset, intensity
+EFFECTS            none | ASCII (size, brightness, spacing, shape, color mode)
+POST-PROCESSING    Bloom, Chromatic Aberration, Film Grain
+ADJUSTMENTS        exposure, contrast, saturation
+CAMERA             FOV, reset
+SCENE              background, grid
+ROTATION           X speed, Y speed, Z speed
+POSITION           X, Y, Z, reset
+DISPLAY            background, bloom intensity
+```
+
+---
+
+## Responsive Design
+
+The editor is built for every form factor:
+
+- **Mobile (< 768px)**: stacked layout with a bottom-sheet drawer for all controls, 44x44 touch target on the lighting bar so finger drags don't clash with model rotation
+- **Tablet (768 - 1023px)**: side-by-side layout with a 272px sidebar
+- **Laptop and desktop (1024px+)**: side-by-side layout with full canvas room
+
+Uses `h-[100dvh]`, `env(safe-area-inset-bottom)`, and `viewport-fit=cover` so iPhone notches and URL-bar resizing behave correctly.
 
 ---
 
@@ -74,16 +128,28 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ```
 make3d/
-├── app/                  # Next.js App Router pages and layout
+├── app/                        # Next.js App Router, layout, favicon
 ├── components/
-│   ├── edit/             # Control panels, export, code generation
-│   ├── modals/           # Video result modal
-│   ├── previews/         # 3D canvas and model rendering
-│   └── ui/               # Shared UI primitives
-├── hooks/                # Custom React hooks
-├── lib/                  # Store (Zustand), exporters, constants, utilities
-├── public/               # Static assets and HDRI textures
-└── styles/               # Global CSS
+│   ├── edit/                   # Panels, export, code generation
+│   │   ├── minimal-controls    # All 11 side panels
+│   │   ├── minimal-export      # PNG / MP4 / GIF / STL / GLB / GLTF
+│   │   ├── code-export         # Live Three.js HTML generator
+│   │   ├── ascii-overlay       # 2D ASCII effect overlay
+│   │   └── lighting-bar        # 360 degree draggable light control
+│   ├── modals/                 # Video result modal
+│   ├── previews/               # Model preview, SVG parsing, env presets
+│   ├── controls/               # Detailed control components
+│   └── ui/                     # Shared UI primitives
+├── hooks/                      # Custom React hooks (mobile, texture preloader)
+├── lib/
+│   ├── store.ts                # Zustand editor state
+│   ├── exporters.ts            # PNG, STL, GLB, GLTF, video exporters
+│   ├── video-recorder.ts       # MP4 / GIF capture via MediaRecorder and gif.js
+│   ├── export-compositor.ts    # Composites WebGL + ASCII overlay for exports
+│   ├── memory-manager.ts       # Three.js resource tracking
+│   └── texture-cache.ts        # LRU texture cache
+├── public/                     # Fonts, textures, logo
+└── styles/                     # Global CSS
 ```
 
 ---
@@ -92,31 +158,38 @@ make3d/
 
 | Layer | Library |
 |---|---|
-| Framework | Next.js 15 (App Router, Turbopack) |
+| Framework | Next.js 16 (App Router, Turbopack) |
 | 3D Rendering | Three.js, React Three Fiber, Drei |
+| Post-Processing | @react-three/postprocessing, postprocessing |
 | State | Zustand |
 | Animation | Framer Motion |
 | Styling | Tailwind CSS v4 |
 | Language | TypeScript |
-
----
-
-## Export Formats
-
-| Format | Details |
-|---|---|
-| **PNG** | Transparent background, rendered at 3x resolution |
-| **STL** | Standard mesh format for 3D printing and CAD tools |
-| **GLB** | Binary GLTF, includes materials and textures |
-| **GLTF** | Text-based GLTF with separate texture files |
-| **MP4** | Recorded rotating video, configurable duration |
-| **GIF** | Animated GIF of the rotating model |
+| Video / GIF | MediaRecorder API, gif.js |
+| HDRI | @pmndrs/assets |
 
 ---
 
 ## Get Code Feature
 
-The **Get Code** panel generates a complete, standalone HTML file you can copy and open directly in any browser. It uses Three.js from a CDN via an import map - no npm, no build step. The generated code stays in sync with all your current settings including material, depth, bevel, colors, and bloom.
+The **GET CODE** panel generates a complete, standalone Three.js HTML file you can copy or download and open directly in any browser.
+
+- Uses Three.js from a CDN via an import map, zero build step
+- Emits only the code needed for what is currently enabled (no dead imports)
+- Updates live as you move sliders
+- Covers every feature the live preview does: lighting angle, bevel, material, environment, ASCII overlay, Bloom, Chromatic Aberration, Film Grain, exposure / contrast / saturation, camera FOV, grid, per-axis rotation, position offsets
+
+Paste the HTML into any editor, save as `.html`, double-click, done.
+
+---
+
+## Export Fidelity
+
+Every image and video export matches the on-screen preview:
+
+- **Three.js post-processing** (Bloom, Chromatic Aberration, Film Grain, Contrast, Saturation, Exposure) runs inside the WebGL pipeline and is captured automatically
+- **ASCII effect** is a 2D overlay on top of the WebGL canvas. At export time the compositor merges both canvases so the exported PNG / MP4 / GIF looks pixel-identical to the preview
+- **STL / GLB / GLTF** export the raw mesh and PBR materials. Screen-space effects like ASCII and Bloom are not geometry and therefore cannot be encoded into a 3D file - this is standard for every 3D pipeline
 
 ---
 
@@ -128,7 +201,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 
 ## Contributing
 
-Pull requests are welcome. For major changes, open an issue first to discuss what you would like to change. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting.
+Pull requests are welcome. For major changes, open an issue first to discuss the direction. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting.
 
 ---
 
