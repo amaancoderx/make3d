@@ -37,6 +37,8 @@ import { EditManagers } from "@/components/edit/edit-managers";
 import { MinimalControls } from "@/components/edit/minimal-controls";
 import { MinimalExport } from "@/components/edit/minimal-export";
 import { CodeExport } from "@/components/edit/code-export";
+import { AsciiOverlay } from "@/components/edit/ascii-overlay";
+import { LightingBar } from "@/components/edit/lighting-bar";
 
 const isSafari = (): boolean => {
   if (typeof window === "undefined") return false;
@@ -560,6 +562,12 @@ export default function Home() {
                 isMobile={isMobile}
                 canvasRef={canvasRef}
               />
+
+              {/* ASCII effect overlay - real-time canvas samples WebGL canvas */}
+              <AsciiOverlay sourceCanvasRef={canvasRef} />
+
+              {/* 360° lighting bar on right edge */}
+              {!isCompareMode && <LightingBar />}
 
               {isCompareMode && svgDataUrl && (
                 <>

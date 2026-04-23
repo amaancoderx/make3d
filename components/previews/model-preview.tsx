@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, Suspense, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { SimpleEnvironment } from "@/components/previews/environment-presets";
@@ -8,6 +8,9 @@ import {
   EffectComposer,
   Bloom,
   BrightnessContrast,
+  ChromaticAberration,
+  Noise,
+  HueSaturation,
 } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
 import { SVGModel } from "./svg-model";
@@ -65,6 +68,103 @@ const CustomBackground = () => {
 
   return null;
 };
+
+// Controls renderer toneMappingExposure from store
+function ExposureController() {
+  const { gl } = useThree();
+  const exposure = useEditorStore((s) => s.exposure);
+  useEffect(() => {
+    gl.toneMappingExposure = exposure;
+  }, [gl, exposure]);
+  return null;
+}
+
+// Controls camera FOV and handles reset requests
+function CameraController({
+  orbitRef,
+  isMobile,
+}: {
+  orbitRef: React.RefObject<any>;
+  isMobile: boolean;
+}) {
+  const { camera } = useThree();
+  const fov = useEditorStore((s) => s.cameraFov);
+  const resetKey = useEditorStore((s) => s.cameraResetKey);
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+  }, [camera, fov]);
+
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    if (camera instanceof THREE.PerspectiveCamera) {
+      if (isMobile) {
+        camera.position.set(0, 20, 180);
+      } else {
+        camera.position.set(0, 0, 150);
+      }
+      camera.updateProjectionMatrix();
+    }
+    if (orbitRef.current && typeof orbitRef.current.reset === "function") {
+      orbitRef.current.reset();
+    }
+  }, [resetKey, camera, isMobile, orbitRef]);
+
+  return null;
+}
+
+// Rotatable directional light controlled by lightAngle
+function LightController() {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const lightAngle = useEditorStore((s) => s.lightAngle);
+
+  useEffect(() => {
+    if (!lightRef.current) return;
+    const radius = 50;
+    lightRef.current.position.set(
+      Math.sin(lightAngle) * radius,
+      Math.cos(lightAngle) * radius * 0.5 + 10,
+      Math.cos(lightAngle) * radius,
+    );
+    lightRef.current.lookAt(0, 0, 0);
+  }, [lightAngle]);
+
+  return (
+    <directionalLight
+      ref={lightRef}
+      intensity={2.0}
+      color="#ffffff"
+      castShadow={false}
+    />
+  );
+}
+
+// Applies per-axis rotation speeds to the model group each frame
+function ModelRotator({
+  groupRef,
+}: {
+  groupRef: React.RefObject<THREE.Group | null>;
+}) {
+  const rotationSpeedX = useEditorStore((s) => s.rotationSpeedX);
+  const rotationSpeedY = useEditorStore((s) => s.rotationSpeedY);
+  const rotationSpeedZ = useEditorStore((s) => s.rotationSpeedZ);
+
+  useFrame((_, delta) => {
+    const g = groupRef.current;
+    if (!g) return;
+    g.rotation.x += rotationSpeedX * delta;
+    g.rotation.y += rotationSpeedY * delta;
+    g.rotation.z += rotationSpeedZ * delta;
+  });
+  return null;
+}
 
 // Helper to attach context lost/restored listeners (Mindful Chase best-practice)
 function WebGLContextEvents() {
@@ -155,6 +255,20 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
     const bloomIntensity = useEditorStore((state) => state.bloomIntensity);
     const bloomMipmapBlur = useEditorStore((state) => state.bloomMipmapBlur);
 
+    // New state
+    const ppBloomEnabled = useEditorStore((s) => s.ppBloomEnabled);
+    const ppBloomStrength = useEditorStore((s) => s.ppBloomStrength);
+    const ppChromaticEnabled = useEditorStore((s) => s.ppChromaticEnabled);
+    const ppChromaticOffset = useEditorStore((s) => s.ppChromaticOffset);
+    const ppFilmEnabled = useEditorStore((s) => s.ppFilmEnabled);
+    const ppFilmIntensity = useEditorStore((s) => s.ppFilmIntensity);
+    const contrast = useEditorStore((s) => s.contrast);
+    const saturation = useEditorStore((s) => s.saturation);
+    const sceneGridEnabled = useEditorStore((s) => s.sceneGridEnabled);
+    const positionOffsetX = useEditorStore((s) => s.positionOffsetX);
+    const positionOffsetY = useEditorStore((s) => s.positionOffsetY);
+    const positionOffsetZ = useEditorStore((s) => s.positionOffsetZ);
+
     const cameraRef = useRef(
       new THREE.PerspectiveCamera(
         50,
@@ -165,6 +279,8 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
         1000,
       ),
     );
+
+    const orbitRef = useRef<any>(null);
 
     useEffect(() => {
       // Track the camera with memory manager
@@ -192,39 +308,87 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
       }
     }, []);
 
+    const chromaticOffset = useMemo(
+      () => new THREE.Vector2(ppChromaticOffset, ppChromaticOffset),
+      [ppChromaticOffset],
+    );
+
     const effects = useMemo(() => {
       // Disable EffectComposer entirely on Safari mobile to prevent freezing
-      // Safari mobile has known issues with WebGL multisampling and postprocessing
       if (isSafariMobileDevice) {
         return null;
       }
 
-      const msaaSamples = isMobile ? 4 : 8; // 4 samples for mobile, 8 for desktop
-
+      const msaaSamples = isMobile ? 4 : 8;
+      const passes: React.ReactElement[] = [];
       if (useBloom) {
-        return (
-          <EffectComposer multisampling={msaaSamples}>
-            <Bloom
-              intensity={bloomIntensity * 0.8}
-              luminanceThreshold={0.9}
-              luminanceSmoothing={0.3}
-              mipmapBlur={bloomMipmapBlur}
-              radius={0.4}
-            />
-          </EffectComposer>
+        passes.push(
+          <Bloom
+            key="bloom-main"
+            intensity={bloomIntensity * 0.8}
+            luminanceThreshold={0.9}
+            luminanceSmoothing={0.3}
+            mipmapBlur={bloomMipmapBlur}
+            radius={0.4}
+          />,
         );
       }
+      if (ppBloomEnabled) {
+        passes.push(
+          <Bloom
+            key="bloom-pp"
+            intensity={ppBloomStrength}
+            luminanceThreshold={0.6}
+            luminanceSmoothing={0.4}
+            mipmapBlur={true}
+            radius={0.7}
+          />,
+        );
+      }
+      if (ppChromaticEnabled) {
+        passes.push(
+          <ChromaticAberration
+            key="chromatic"
+            offset={chromaticOffset}
+            radialModulation={false}
+            modulationOffset={0}
+          />,
+        );
+      }
+      if (ppFilmEnabled) {
+        passes.push(
+          <Noise
+            key="noise"
+            opacity={ppFilmIntensity}
+            blendFunction={BlendFunction.OVERLAY}
+            premultiply
+          />,
+        );
+      }
+      passes.push(
+        <BrightnessContrast key="bc" brightness={0} contrast={contrast - 1} />,
+      );
+      passes.push(
+        <HueSaturation key="hs" saturation={saturation - 1} hue={0} />,
+      );
 
-      // Always enable MSAA even without bloom for smoother edges
       return (
         <EffectComposer multisampling={msaaSamples}>
-          <BrightnessContrast brightness={0} contrast={0} />
+          {passes as unknown as React.ReactElement}
         </EffectComposer>
       );
     }, [
       useBloom,
       bloomIntensity,
       bloomMipmapBlur,
+      ppBloomEnabled,
+      ppBloomStrength,
+      ppChromaticEnabled,
+      chromaticOffset,
+      ppFilmEnabled,
+      ppFilmIntensity,
+      contrast,
+      saturation,
       isMobile,
       isSafariMobileDevice,
     ]);
@@ -244,7 +408,6 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
     const dpr = useMemo(() => {
       if (typeof window === "undefined") return 1.5;
       const deviceDpr = window.devicePixelRatio || 1.5;
-      // Cap DPR at 2 for Safari mobile to prevent GPU overload
       return isSafariMobileDevice ? Math.min(deviceDpr, 2) : deviceDpr;
     }, [isSafariMobileDevice]);
 
@@ -252,7 +415,7 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
 
     return (
       <Canvas
-        shadows={!isSafariMobileDevice} // Disable shadows on Safari mobile
+        shadows={!isSafariMobileDevice}
         camera={{
           position: isMobile ? [0, 20, 180] : [0, 0, 150],
           fov: isMobile ? 65 : 50,
@@ -261,7 +424,7 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
         frameloop={isSafariMobileDevice ? "demand" : "always"}
         performance={{ min: isSafariMobileDevice ? 0.3 : 0.5 }}
         gl={{
-          antialias: !isSafariMobileDevice, // Disable antialias on Safari mobile
+          antialias: !isSafariMobileDevice,
           outputColorSpace: "srgb",
           toneMapping: THREE.AgXToneMapping,
           toneMappingExposure: 1.0,
@@ -285,19 +448,14 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
         }}>
         <Suspense fallback={null}>
           <CustomBackground />
-          {/* Attach WebGL context event listeners */}
           <WebGLContextEvents />
-          {/* Capture canvas reference for video recording */}
           <CanvasCapture canvasRef={canvasRef} />
+          <ExposureController />
+          <CameraController orbitRef={orbitRef} isMobile={isMobile} />
 
           <ambientLight intensity={0.4} color="#ffffff" />
 
-          <directionalLight
-            position={[10, 10, 5]}
-            intensity={2.0}
-            color="#ffffff"
-            castShadow={false}
-          />
+          <LightController />
 
           <directionalLight
             position={[-10, -10, -5]}
@@ -306,10 +464,19 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
             castShadow={false}
           />
 
-          {/* Disable environment on Safari mobile to prevent freezing */}
           {!isSafariMobileDevice && environment}
 
-          <group ref={modelGroupRef} rotation={[0, modelRotationY, 0]}>
+          {sceneGridEnabled && (
+            <gridHelper
+              args={[400, 40, "#ffffff", "#444444"]}
+              position={[0, -40, 0]}
+            />
+          )}
+
+          <group
+            ref={modelGroupRef}
+            rotation={[0, modelRotationY, 0]}
+            position={[positionOffsetX, positionOffsetY, positionOffsetZ]}>
             <SVGModel
               svgData={svgData}
               depth={depth * 5}
@@ -337,18 +504,20 @@ export const ModelPreview = React.memo<ModelPreviewProps>(
               spread={0}
               isMobile={isMobile}
               ref={modelRef}
-              // Texture settings - disable on Safari mobile
               textureEnabled={isSafariMobileDevice ? false : textureEnabled}
               texturePreset={texturePreset}
               textureScale={textureScale}
               textureDepth={textureDepth}
             />
           </group>
+
+          <ModelRotator groupRef={modelGroupRef} />
         </Suspense>
 
         {effects}
 
         <OrbitControls
+          ref={orbitRef}
           autoRotate={isSafariMobileDevice ? false : autoRotate}
           autoRotateSpeed={autoRotateSpeed}
           minDistance={isMobile ? 80 : 50}

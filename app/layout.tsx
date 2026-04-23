@@ -30,12 +30,6 @@ const clashGrotesk = LocalFont({
 export const metadata: Metadata = {
   title: "Make3D - SVG to 3D in Seconds",
   description: "Transform any SVG into a stunning 3D model. Customize materials, lighting, and export in seconds. No code. No installs.",
-  icons: {
-    icon: [
-      { media: "(prefers-color-scheme: light)", url: "/logo_light.svg" },
-      { media: "(prefers-color-scheme: dark)", url: "/logo_dark.svg" },
-    ],
-  },
   openGraph: {
     title: "Make3D - SVG to 3D in Seconds",
     description: "Transform any SVG into a stunning 3D model. Customize materials, lighting, and export in seconds. No code. No installs.",

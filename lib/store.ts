@@ -73,6 +73,49 @@ interface EditorState {
   completedVideoFormat: "mp4" | "gif" | null;
   completedVideoFileName: string | null;
 
+  // --- NEW STATE ---
+
+  // Lighting bar
+  lightAngle: number;
+
+  // Effects
+  effectType: "none" | "ascii";
+  asciiSize: number;
+  asciiBrightness: number;
+  asciiSpacing: number;
+  asciiShape: string;
+  asciiColorMode: string;
+
+  // Post-Processing
+  ppBloomEnabled: boolean;
+  ppBloomStrength: number;
+  ppChromaticEnabled: boolean;
+  ppChromaticOffset: number;
+  ppFilmEnabled: boolean;
+  ppFilmIntensity: number;
+
+  // Adjustments
+  exposure: number;
+  contrast: number;
+  saturation: number;
+
+  // Camera
+  cameraFov: number;
+  cameraResetKey: number;
+
+  // Scene
+  sceneGridEnabled: boolean;
+
+  // Rotation per-axis
+  rotationSpeedX: number;
+  rotationSpeedY: number;
+  rotationSpeedZ: number;
+
+  // Position offset
+  positionOffsetX: number;
+  positionOffsetY: number;
+  positionOffsetZ: number;
+
   // Actions
   setSvgData: (data: string | null) => void;
   setFileName: (name: string) => void;
@@ -129,7 +172,6 @@ interface EditorState {
   ) => void;
   resetRecordingState: () => void;
 
-  // Video Modal Actions
   setVideoModalOpen: (open: boolean) => void;
   setCompletedVideo: (
     blob: Blob | null,
@@ -137,6 +179,41 @@ interface EditorState {
     fileName: string | null,
   ) => void;
   clearCompletedVideo: () => void;
+
+  // New actions
+  setLightAngle: (angle: number) => void;
+
+  setEffectType: (type: "none" | "ascii") => void;
+  setAsciiSize: (v: number) => void;
+  setAsciiBrightness: (v: number) => void;
+  setAsciiSpacing: (v: number) => void;
+  setAsciiShape: (v: string) => void;
+  setAsciiColorMode: (v: string) => void;
+
+  setPpBloomEnabled: (v: boolean) => void;
+  setPpBloomStrength: (v: number) => void;
+  setPpChromaticEnabled: (v: boolean) => void;
+  setPpChromaticOffset: (v: number) => void;
+  setPpFilmEnabled: (v: boolean) => void;
+  setPpFilmIntensity: (v: number) => void;
+
+  setExposure: (v: number) => void;
+  setContrast: (v: number) => void;
+  setSaturation: (v: number) => void;
+
+  setCameraFov: (v: number) => void;
+  triggerCameraReset: () => void;
+
+  setSceneGridEnabled: (v: boolean) => void;
+
+  setRotationSpeedX: (v: number) => void;
+  setRotationSpeedY: (v: number) => void;
+  setRotationSpeedZ: (v: number) => void;
+
+  setPositionOffsetX: (v: number) => void;
+  setPositionOffsetY: (v: number) => void;
+  setPositionOffsetZ: (v: number) => void;
+  resetPosition: () => void;
 
   // Complex Actions
   toggleVibeMode: (newState: boolean) => void;
@@ -198,11 +275,44 @@ export const useEditorStore = create<EditorState>((set) => ({
   recordingFormat: null,
   recordingStatus: "idle",
 
-  // Video Modal State
   videoModalOpen: false,
   completedVideoBlob: null,
   completedVideoFormat: null,
   completedVideoFileName: null,
+
+  // New initial state
+  lightAngle: Math.PI / 4,
+
+  effectType: "none",
+  asciiSize: 15,
+  asciiBrightness: 2,
+  asciiSpacing: 0,
+  asciiShape: "Mixed",
+  asciiColorMode: "original",
+
+  ppBloomEnabled: false,
+  ppBloomStrength: 1.0,
+  ppChromaticEnabled: false,
+  ppChromaticOffset: 0.005,
+  ppFilmEnabled: false,
+  ppFilmIntensity: 0.35,
+
+  exposure: 1.0,
+  contrast: 1.0,
+  saturation: 1.0,
+
+  cameraFov: 50,
+  cameraResetKey: 0,
+
+  sceneGridEnabled: false,
+
+  rotationSpeedX: 0,
+  rotationSpeedY: 0,
+  rotationSpeedZ: 0,
+
+  positionOffsetX: 0,
+  positionOffsetY: 0,
+  positionOffsetZ: 0,
 
   // Simple Actions
   setSvgData: (data) => set({ svgData: data }),
@@ -268,7 +378,6 @@ export const useEditorStore = create<EditorState>((set) => ({
       recordingStatus: "idle",
     }),
 
-  // Video Modal Actions
   setVideoModalOpen: (open) => set({ videoModalOpen: open }),
   setCompletedVideo: (blob, format, fileName) =>
     set({
@@ -282,6 +391,41 @@ export const useEditorStore = create<EditorState>((set) => ({
       completedVideoFormat: null,
       completedVideoFileName: null,
     }),
+
+  // New actions
+  setLightAngle: (angle) => set({ lightAngle: angle }),
+
+  setEffectType: (type) => set({ effectType: type }),
+  setAsciiSize: (v) => set({ asciiSize: v }),
+  setAsciiBrightness: (v) => set({ asciiBrightness: v }),
+  setAsciiSpacing: (v) => set({ asciiSpacing: v }),
+  setAsciiShape: (v) => set({ asciiShape: v }),
+  setAsciiColorMode: (v) => set({ asciiColorMode: v }),
+
+  setPpBloomEnabled: (v) => set({ ppBloomEnabled: v }),
+  setPpBloomStrength: (v) => set({ ppBloomStrength: v }),
+  setPpChromaticEnabled: (v) => set({ ppChromaticEnabled: v }),
+  setPpChromaticOffset: (v) => set({ ppChromaticOffset: v }),
+  setPpFilmEnabled: (v) => set({ ppFilmEnabled: v }),
+  setPpFilmIntensity: (v) => set({ ppFilmIntensity: v }),
+
+  setExposure: (v) => set({ exposure: v }),
+  setContrast: (v) => set({ contrast: v }),
+  setSaturation: (v) => set({ saturation: v }),
+
+  setCameraFov: (v) => set({ cameraFov: v }),
+  triggerCameraReset: () => set((s) => ({ cameraResetKey: s.cameraResetKey + 1 })),
+
+  setSceneGridEnabled: (v) => set({ sceneGridEnabled: v }),
+
+  setRotationSpeedX: (v) => set({ rotationSpeedX: v }),
+  setRotationSpeedY: (v) => set({ rotationSpeedY: v }),
+  setRotationSpeedZ: (v) => set({ rotationSpeedZ: v }),
+
+  setPositionOffsetX: (v) => set({ positionOffsetX: v }),
+  setPositionOffsetY: (v) => set({ positionOffsetY: v }),
+  setPositionOffsetZ: (v) => set({ positionOffsetZ: v }),
+  resetPosition: () => set({ positionOffsetX: 0, positionOffsetY: 0, positionOffsetZ: 0 }),
 
   // Complex Actions
   toggleVibeMode: (newState) =>
@@ -348,5 +492,37 @@ export const useEditorStore = create<EditorState>((set) => ({
       useBloom: false,
       bloomIntensity: 1.0,
       bloomMipmapBlur: true,
+
+      lightAngle: Math.PI / 4,
+      effectType: "none",
+      asciiSize: 15,
+      asciiBrightness: 2,
+      asciiSpacing: 0,
+      asciiShape: "Mixed",
+      asciiColorMode: "original",
+
+      ppBloomEnabled: false,
+      ppBloomStrength: 1.0,
+      ppChromaticEnabled: false,
+      ppChromaticOffset: 0.005,
+      ppFilmEnabled: false,
+      ppFilmIntensity: 0.35,
+
+      exposure: 1.0,
+      contrast: 1.0,
+      saturation: 1.0,
+
+      cameraFov: 50,
+      cameraResetKey: 0,
+
+      sceneGridEnabled: false,
+
+      rotationSpeedX: 0,
+      rotationSpeedY: 0,
+      rotationSpeedZ: 0,
+
+      positionOffsetX: 0,
+      positionOffsetY: 0,
+      positionOffsetZ: 0,
     })),
 }));
