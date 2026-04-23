@@ -32,6 +32,7 @@ export function LightingBar() {
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!draggingRef.current) return;
+      e.preventDefault();
       if (e.touches[0]) updateFromClientY(e.touches[0].clientY);
     };
     const onUp = () => {
@@ -41,50 +42,58 @@ export function LightingBar() {
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onUp);
+    window.addEventListener("touchcancel", onUp);
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onUp);
+      window.removeEventListener("touchcancel", onUp);
     };
   }, [updateFromClientY]);
 
   return (
     <div
-      className="pointer-events-none absolute inset-y-10 right-6 z-20 flex items-stretch"
+      ref={barRef}
+      className="pointer-events-none absolute inset-y-10 right-4 z-20 sm:right-6"
       style={{ width: "18px" }}>
+      {/* Thin vertical line - visual only, no pointer events so canvas gestures pass through */}
       <div
-        ref={barRef}
-        className="pointer-events-auto relative mx-auto h-full cursor-pointer"
-        style={{ width: "18px" }}
+        className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+        style={{
+          top: 0,
+          bottom: 0,
+          width: "1px",
+          background: "rgba(255,255,255,0.55)",
+        }}
+      />
+      {/* Handle with oversized touch target (44x44 on mobile, 32x32 on desktop) */}
+      <div
+        className="pointer-events-auto absolute left-1/2 flex cursor-pointer items-center justify-center"
+        style={{
+          width: "44px",
+          height: "44px",
+          top: `calc(${t * 100}% - 22px)`,
+          transform: "translateX(-50%)",
+          touchAction: "none",
+          transition: draggingRef.current ? "none" : "top 0.08s linear",
+        }}
         onMouseDown={(e) => {
           e.preventDefault();
           draggingRef.current = true;
           updateFromClientY(e.clientY);
         }}
         onTouchStart={(e) => {
+          e.preventDefault();
           draggingRef.current = true;
           if (e.touches[0]) updateFromClientY(e.touches[0].clientY);
         }}>
-        {/* Thin vertical line */}
+        {/* Visual handle dot */}
         <div
-          className="absolute left-1/2 -translate-x-1/2"
-          style={{
-            top: 0,
-            bottom: 0,
-            width: "1px",
-            background: "rgba(255,255,255,0.55)",
-          }}
-        />
-        {/* Handle */}
-        <div
-          className="absolute left-1/2 rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.7),0_0_28px_rgba(255,255,255,0.25)]"
+          className="rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.7),0_0_28px_rgba(255,255,255,0.25)]"
           style={{
             width: "14px",
             height: "14px",
-            top: `calc(${t * 100}% - 7px)`,
-            transform: "translateX(-50%)",
-            transition: draggingRef.current ? "none" : "top 0.08s linear",
           }}
         />
       </div>
