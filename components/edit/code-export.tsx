@@ -66,33 +66,22 @@ function generateHTML(o: CodeOpts): string {
   const useComposer =
     o.useBloom || o.ppBloomEnabled || o.ppChromaticEnabled || o.ppFilmEnabled || hasColorGrade;
 
-  const addonImports: string[] = [];
+  // Use the `postprocessing` library (same one the live preview uses via
+  // @react-three/postprocessing) so Bloom / Chromatic Aberration / Film Grain /
+  // Contrast / Saturation match the editor pixel-for-pixel. UnrealBloomPass
+  // from three/addons has a very different look and is avoided here.
+  const ppImports: string[] = [];
   if (useComposer) {
-    addonImports.push(
-      "import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';",
-      "import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';",
-      "import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';",
+    const names = ["EffectComposer", "RenderPass", "EffectPass"];
+    if (o.useBloom || o.ppBloomEnabled) names.push("BloomEffect");
+    if (o.ppChromaticEnabled) names.push("ChromaticAberrationEffect");
+    if (o.ppFilmEnabled) names.push("NoiseEffect", "BlendFunction");
+    if (hasColorGrade) {
+      names.push("BrightnessContrastEffect", "HueSaturationEffect");
+    }
+    ppImports.push(
+      `import { ${names.join(", ")} } from 'postprocessing';`,
     );
-    if (o.useBloom || o.ppBloomEnabled) {
-      addonImports.push(
-        "import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';",
-      );
-    }
-    if (o.ppChromaticEnabled || hasColorGrade) {
-      addonImports.push(
-        "import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';",
-      );
-    }
-    if (o.ppChromaticEnabled) {
-      addonImports.push(
-        "import { RGBShiftShader } from 'three/addons/shaders/RGBShiftShader.js';",
-      );
-    }
-    if (o.ppFilmEnabled) {
-      addonImports.push(
-        "import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';",
-      );
-    }
   }
 
   const autoRotateCode = o.autoRotate
@@ -146,73 +135,68 @@ grid.position.y = -40;
 scene.add(grid);`
     : "";
 
-  const colorGradeShader = hasColorGrade
-    ? `
-// ─── Color Grading Shader (contrast + saturation) ─────
-const ColorGradeShader = {
-  uniforms: {
-    tDiffuse: { value: null },
-    contrast: { value: ${o.contrast.toFixed(2)} },
-    saturation: { value: ${o.saturation.toFixed(2)} },
-  },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-  fragmentShader: \`
-    uniform sampler2D tDiffuse;
-    uniform float contrast;
-    uniform float saturation;
-    varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      c.rgb = (c.rgb - 0.5) * contrast + 0.5;
-      float gray = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-      c.rgb = mix(vec3(gray), c.rgb, saturation);
-      gl_FragColor = c;
-    }
-  \`,
-};`
-    : "";
+  // No custom shader needed - postprocessing library ships BrightnessContrastEffect
+  // and HueSaturationEffect that match exactly what the editor preview uses.
+  const colorGradeShader = "";
 
   const composerSetup = useComposer
     ? `
-// ─── Post-Processing Composer ─────────────────────────
+// ─── Post-Processing Composer (postprocessing library, 1:1 with editor) ─────
 const composer = new EffectComposer(renderer);
 composer.setSize(window.innerWidth, window.innerHeight);
 composer.setPixelRatio(window.devicePixelRatio);
 composer.addPass(new RenderPass(scene, camera));
+
+const _effects = [];
 ${
   o.useBloom
-    ? `composer.addPass(new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
-  ${(o.bloomIntensity * 0.8).toFixed(2)}, 0.4, 0.9
-));`
+    ? `_effects.push(new BloomEffect({
+  intensity: ${(o.bloomIntensity * 0.8).toFixed(2)},
+  luminanceThreshold: 0.9,
+  luminanceSmoothing: 0.3,
+  mipmapBlur: true,
+  radius: 0.4,
+}));`
     : ""
 }${
         o.ppBloomEnabled
           ? `
-composer.addPass(new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
-  ${o.ppBloomStrength.toFixed(2)}, 0.7, 0.6
-));`
+_effects.push(new BloomEffect({
+  intensity: ${o.ppBloomStrength.toFixed(2)},
+  luminanceThreshold: 0.6,
+  luminanceSmoothing: 0.4,
+  mipmapBlur: true,
+  radius: 0.7,
+}));`
           : ""
       }${
         o.ppChromaticEnabled
           ? `
-const rgbShift = new ShaderPass(RGBShiftShader);
-rgbShift.uniforms.amount.value = ${o.ppChromaticOffset.toFixed(4)};
-composer.addPass(rgbShift);`
+_effects.push(new ChromaticAberrationEffect({
+  offset: new THREE.Vector2(${o.ppChromaticOffset.toFixed(4)}, ${o.ppChromaticOffset.toFixed(4)}),
+  radialModulation: false,
+  modulationOffset: 0,
+}));`
           : ""
       }${
         o.ppFilmEnabled
           ? `
-composer.addPass(new FilmPass(${o.ppFilmIntensity.toFixed(2)}, false));`
+const _noise = new NoiseEffect({
+  blendFunction: BlendFunction.OVERLAY,
+  premultiply: true,
+});
+_noise.blendMode.opacity.value = ${o.ppFilmIntensity.toFixed(2)};
+_effects.push(_noise);`
           : ""
       }${
         hasColorGrade
           ? `
-composer.addPass(new ShaderPass(ColorGradeShader));`
+_effects.push(new BrightnessContrastEffect({ brightness: 0, contrast: ${(o.contrast - 1).toFixed(2)} }));
+_effects.push(new HueSaturationEffect({ saturation: ${(o.saturation - 1).toFixed(2)}, hue: 0 }));`
           : ""
       }
-composer.addPass(new OutputPass());`
+
+composer.addPass(new EffectPass(camera, ..._effects));`
     : "";
 
   const renderCall = useComposer ? "composer.render();" : "renderer.render(scene, camera);";
@@ -315,7 +299,7 @@ function updateAscii() {
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"${useComposer ? ',\n    "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.38.0/build/postprocessing.esm.js"' : ""}
   }
 }
 </script>
@@ -325,7 +309,7 @@ import * as THREE from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-${addonImports.join("\n")}
+${ppImports.join("\n")}
 ${colorGradeShader}
 
 // ─── Renderer ─────────────────────────────────────────
