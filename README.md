@@ -20,6 +20,8 @@
 
 <br/>
 
+https://github.com/user-attachments/assets/eaa35f10-2635-4595-8841-2f094c7cbcbe
+
 
 Make3D is a free, open-source browser tool that converts SVG files into interactive 3D models with cinematic post-processing, stylized effects, and real-time code generation. No installs, no accounts, no server uploads. Everything runs locally in your browser.
 
